@@ -14,7 +14,8 @@ async function migrate() {
     )
   `);
 
-  const dir = path.join(__dirname, '..', 'migrations');
+  // process.cwd() is the project root both locally and in Docker (/app)
+  const dir = path.join(process.cwd(), 'migrations');
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
 
   for (const file of files) {
