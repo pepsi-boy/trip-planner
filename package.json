@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "npm run client:build && tsc",
+    "client:build": "cd client && npm run build",
     "start": "node dist/src/index.js",
     "migrate": "tsx scripts/migrate.ts",
     "test": "vitest run"

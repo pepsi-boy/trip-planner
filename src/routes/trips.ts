@@ -39,7 +39,7 @@ router.get('/trips/:id', async (req: Request, res: Response) => {
   }
   const { rows: memberRows } = await pool.query(
     `SELECT m.id, m.name, m.home_airport, m.created_at,
-            p.budget, p.weather_weight, p.nightlife_weight
+            p.budget, p.weather_weight, p.nightlife_weight, p.preferred_temp_f
      FROM members m
      LEFT JOIN preferences p ON p.member_id = m.id
      WHERE m.trip_id = $1
