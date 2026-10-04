@@ -13,7 +13,7 @@ interface Itinerary {
 export class FixtureFlightProvider implements FlightProvider {
   private itineraries: Itinerary[];
 
-  constructor(fixturePath = path.join(__dirname, '../../../fixtures/bna-sfo.json')) {
+  constructor(fixturePath = path.join(process.cwd(), 'fixtures/bna-sfo.json')) {
     const raw = fs.readFileSync(fixturePath, 'utf8');
     this.itineraries = (JSON.parse(raw) as { itineraries: Itinerary[] }).itineraries;
   }
