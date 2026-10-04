@@ -26,4 +26,5 @@ export const UpsertPreferencesBody = z.object({
   budget: z.number().positive(),
   weather_weight: z.number().min(0).max(1),
   nightlife_weight: z.number().min(0).max(1),
+  preferred_temp_f: z.number().min(20).max(110),
 });

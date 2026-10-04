@@ -7,7 +7,7 @@ import type { FlightProvider, WeatherProvider, NightlifeProvider } from './inter
 
 // Use fixture flight provider unless IGNAV_LIVE=true is explicitly set.
 // This protects the 1,000-request free tier during dev and tests.
-export const flightProvider: FlightProvider = process.env['IGNAV_LIVE'] === 'true'
+export const flightProvider: FlightProvider = process.env['USE_LIVE_FLIGHTS'] === 'true'
   ? new IgnavFlightProvider(process.env['IGNAV_API_KEY'] ?? '')
   : new FixtureFlightProvider();
 

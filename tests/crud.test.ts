@@ -70,7 +70,7 @@ describe('trips CRUD', () => {
       it('PUT preferences upserts', async () => {
         const res = await request(app)
           .put(`/trips/${tripId}/members/${memberId}/preferences`)
-          .send({ budget: 500, weather_weight: 0.6, nightlife_weight: 0.4 });
+          .send({ budget: 500, weather_weight: 0.6, nightlife_weight: 0.4, preferred_temp_f: 72 });
         expect(res.status).toBe(200);
         expect(Number(res.body.budget)).toBe(500);
       });
@@ -85,14 +85,14 @@ describe('trips CRUD', () => {
       it('rejects weight out of range', async () => {
         const res = await request(app)
           .put(`/trips/${tripId}/members/${memberId}/preferences`)
-          .send({ budget: 500, weather_weight: 1.5, nightlife_weight: 0.4 });
+          .send({ budget: 500, weather_weight: 1.5, nightlife_weight: 0.4, preferred_temp_f: 72 });
         expect(res.status).toBe(400);
       });
 
       it('rejects negative budget', async () => {
         const res = await request(app)
           .put(`/trips/${tripId}/members/${memberId}/preferences`)
-          .send({ budget: -100, weather_weight: 0.5, nightlife_weight: 0.5 });
+          .send({ budget: -100, weather_weight: 0.5, nightlife_weight: 0.5, preferred_temp_f: 72 });
         expect(res.status).toBe(400);
       });
     });

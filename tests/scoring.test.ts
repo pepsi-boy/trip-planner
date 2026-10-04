@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { scoreDestinations, type MemberInput, type DestinationData } from '../src/scoring';
 
 const members: MemberInput[] = [
-  { id: 'm1', name: 'Alice', budget: 500, weatherWeight: 0.8, nightlifeWeight: 0.2 },
-  { id: 'm2', name: 'Bob',   budget: 300, weatherWeight: 0.2, nightlifeWeight: 0.8 },
+  { id: 'm1', name: 'Alice', budget: 500, weatherWeight: 0.8, nightlifeWeight: 0.2, preferredTempF: 80 },
+  { id: 'm2', name: 'Bob',   budget: 300, weatherWeight: 0.2, nightlifeWeight: 0.8, preferredTempF: 65 },
 ];
 
 const destinations: DestinationData[] = [
-  { iata: 'MIA', city: 'Miami',     fare: 200, temperatureF: 82, venueCount: 400 },
-  { iata: 'DEN', city: 'Denver',    fare: 150, temperatureF: 55, venueCount: 200 },
-  { iata: 'LAS', city: 'Las Vegas', fare: 180, temperatureF: 75, venueCount: 500 },
+  { iata: 'MIA', city: 'Miami',     fare: 200, temperatureF: 82, nightlifeScore: 0.85 },
+  { iata: 'DEN', city: 'Denver',    fare: 150, temperatureF: 55, nightlifeScore: 0.55 },
+  { iata: 'LAS', city: 'Las Vegas', fare: 180, temperatureF: 75, nightlifeScore: 0.95 },
 ];
 
 describe('scoreDestinations', () => {
@@ -27,7 +27,7 @@ describe('scoreDestinations', () => {
 
   it('marks unaffordable correctly', () => {
     const expensive: DestinationData[] = [
-      { iata: 'CDG', city: 'Paris', fare: 900, temperatureF: 60, venueCount: 450 },
+      { iata: 'CDG', city: 'Paris', fare: 900, temperatureF: 60, nightlifeScore: 0.90 },
     ];
     const results = scoreDestinations(members, expensive);
     const paris = results[0]!;
