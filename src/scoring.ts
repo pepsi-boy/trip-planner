@@ -4,30 +4,30 @@
 //   weighted-average: maximises total happiness across the group.
 //   max-min: maximises the least-happy person's score (egalitarian).
 //
-// The tradeoff: weighted-average finds the destination most people love,
-// but can leave one person miserable. Max-min protects the outlier but
-// may pick a destination nobody is excited about.
+// Tradeoff: weighted-average can leave one person miserable if the rest love a destination.
+// Max-min protects the outlier but may pick somewhere nobody is excited about.
 
 export interface MemberInput {
   id: string;
   name: string;
-  budget: number;          // max one-way fare in USD
-  weatherWeight: number;   // 0–1
-  nightlifeWeight: number; // 0–1
+  budget: number;           // max one-way fare in USD
+  weatherWeight: number;    // 0-1
+  nightlifeWeight: number;  // 0-1
+  preferredTempF: number;   // ideal temperature in Fahrenheit
 }
 
 export interface DestinationData {
   iata: string;
   city: string;
-  fare: number;            // cheapest one-way fare in USD
-  temperatureF: number;
-  venueCount: number;
+  fare: number;             // cheapest one-way fare in USD
+  temperatureF: number;     // current forecast temperature
+  nightlifeScore: number;   // 0-1, curated static score from DB
 }
 
 export interface MemberScore {
   memberId: string;
   memberName: string;
-  score: number;           // 0–1, higher is better
+  score: number;            // 0-1, higher is better
   affordable: boolean;
 }
 
@@ -36,43 +36,35 @@ export interface RankedDestination {
   city: string;
   fare: number;
   temperatureF: number;
-  venueCount: number;
+  nightlifeScore: number;
   memberScores: MemberScore[];
   groupWeightedAvg: number;
   groupMaxMin: number;
-}
-
-function normalize(value: number, min: number, max: number): number {
-  if (max === min) return 1;
-  return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
 export function scoreDestinations(
   members: MemberInput[],
   destinations: DestinationData[],
 ): RankedDestination[] {
-  const fares = destinations.map(d => d.fare);
-  const temps = destinations.map(d => d.temperatureF);
-  const venues = destinations.map(d => d.venueCount);
-
-  const fareMin = Math.min(...fares);
-  const fareMax = Math.max(...fares);
-  const tempMin = Math.min(...temps);
-  const tempMax = Math.max(...temps);
-  const venueMin = Math.min(...venues);
-  const venueMax = Math.max(...venues);
-
   const ranked = destinations.map(dest => {
-    // Lower fare is better — invert the normalized fare score
-    const fareScore = 1 - normalize(dest.fare, fareMin, fareMax);
-    const tempScore = normalize(dest.temperatureF, tempMin, tempMax);
-    const venueScore = normalize(dest.venueCount, venueMin, venueMax);
-
     const memberScores: MemberScore[] = members.map(m => {
-      const totalWeight = m.weatherWeight + m.nightlifeWeight + 1; // 1 = implicit budget weight
+      // Cost: 1.0 at fare=0, falls linearly to 0 at fare=budget, 0 if over budget
+      const costScore = Math.max(0, 1 - dest.fare / m.budget);
+
+      // Weather: 1.0 at preferred temp, drops 0.02 per degree off, floors at 0
+      // A 50°F difference = score of 0
+      const weatherScore = Math.max(0, 1 - Math.abs(dest.temperatureF - m.preferredTempF) / 50);
+
+      // Nightlife: direct from DB (0-1)
+      const nightlifeScore = dest.nightlifeScore;
+
+      const totalWeight = 1 + m.weatherWeight + m.nightlifeWeight;
       const score =
-        (fareScore * 1 + tempScore * m.weatherWeight + venueScore * m.nightlifeWeight) /
+        (costScore * 1 +
+          weatherScore * m.weatherWeight +
+          nightlifeScore * m.nightlifeWeight) /
         totalWeight;
+
       return {
         memberId: m.id,
         memberName: m.name,
@@ -90,13 +82,12 @@ export function scoreDestinations(
       city: dest.city,
       fare: dest.fare,
       temperatureF: dest.temperatureF,
-      venueCount: dest.venueCount,
+      nightlifeScore: dest.nightlifeScore,
       memberScores,
       groupWeightedAvg: Math.round(groupWeightedAvg * 1000) / 1000,
       groupMaxMin: Math.round(groupMaxMin * 1000) / 1000,
     };
   });
 
-  // Return sorted by weighted average (caller can re-sort by max-min if needed)
   return ranked.sort((a, b) => b.groupWeightedAvg - a.groupWeightedAvg);
 }

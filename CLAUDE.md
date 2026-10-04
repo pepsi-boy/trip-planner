@@ -2,7 +2,7 @@
 
 ## Project
 
-A backend service + minimal React page. Friends each enter a home airport, budget, and weights for weather and nightlife. The service fetches weather, flight prices, and nightlife data for candidate destinations, scores each destination per person, and ranks destinations for the whole group.
+A backend service + minimal React page. Friends each enter a home airport, budget, preferred temperature, and weights for weather and nightlife. The service fetches weather and flight prices for candidate destinations, scores each destination per person, and ranks destinations for the whole group.
 
 **Purpose:** Portfolio project for SWE internship applications (Amazon, Microsoft, Google, NVIDIA, Cloudflare, etc.). Must look like real engineering: CRUD API, Postgres, tests, CI, Docker, deployed, strong README. Target: deployed in one evening (~5 hours).
 
@@ -16,7 +16,7 @@ A backend service + minimal React page. Friends each enter a home airport, budge
 - dotenv
 - React (minimal page, added later)
 - GitHub Actions for tests
-- Deploy via Dockerfile to Render, Railway, or Fly.io
+- Deployed via Dockerfile to Render
 
 ---
 
@@ -28,7 +28,7 @@ GET https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..&current=temp
 ```
 - Cache each city for 15 minutes (data updates every 15 min).
 
-### 2. Flights — Ignav
+### 2. Flights — Ignav (one-way fares only)
 ```
 POST https://ignav.com/api/fares/one-way
 Header: X-Api-Key (from IGNAV_API_KEY in .env)
@@ -38,18 +38,44 @@ Body: { origin, destination, departure_date }
 - More than one segment = connection.
 - **NEVER call live API during dev or tests.** Free tier = 1,000 requests.
 - Use `fixtures/bna-sfo.json` for all dev/test work.
-- Only call live if the user explicitly asks.
+- Default to fixture provider. Enable live calls only via `USE_LIVE_FLIGHTS=true` env var.
+- budget = max acceptable one-way fare in USD.
 
-### 3. Nightlife — TBD
-- Candidates: Foursquare, Geoapify, OpenStreetMap Overpass.
-- **Ask before picking one.** If none works, use a static dataset and note it in README.
+### 3. Nightlife — curated static scores
+- `nightlife_score` (0.0-1.0) is stored directly on each destination row in the DB.
+- Scores are hand-curated estimates. README states this clearly.
+- No live API needed. If a live source is added later, it slots in via the NightlifeProvider interface.
+
+---
+
+## Scoring Formula
+
+For each member + destination pair:
+
+```
+weather_score  = max(0, 1 - |forecast_temp - preferred_temp_f| / 50)
+cost_score     = max(0, 1 - fare / budget)   → 0 if fare > budget
+nightlife_score = destination.nightlife_score  (0-1, from DB)
+
+member_score = (
+  cost_score * 1 +
+  weather_score * weather_weight +
+  nightlife_score * nightlife_weight
+) / (1 + weather_weight + nightlife_weight)
+```
+
+Group strategies (both returned in /score response):
+- **weighted-average**: mean of all member scores. Maximises total happiness.
+- **max-min**: minimum member score. Maximises the least-happy person's score (egalitarian).
+
+Tradeoff: weighted-average can leave one person miserable if everyone else loves a destination. Max-min protects the outlier but may pick somewhere nobody is excited about. Explain this in the README.
 
 ---
 
 ## Design Decisions
 
 ### Provider interfaces
-Every external provider sits behind an interface (`FlightProvider`, `WeatherProvider`, `PlacesProvider`) so it can be swapped. Include a fixture-backed or estimate-backed `FlightProvider` for tests and fallback.
+Every external provider sits behind an interface (`FlightProvider`, `WeatherProvider`, `NightlifeProvider`) so it can be swapped. Fixture-backed `FlightProvider` is the default.
 
 ### Fare schema
 ```ts
@@ -63,26 +89,37 @@ type FareQuote = {
 ```
 Scoring only sees `FareQuote`.
 
-### Rate limiting & caching
-- Token bucket per provider, in-memory (no Redis tonight).
-- Caching + retry with backoff per provider.
-- Also rate-limit the public API.
+### Flight provider env flag
+- `USE_LIVE_FLIGHTS=true` → use live Ignav API
+- Default (unset or false) → use fixture provider (`fixtures/bna-sfo.json`)
+- Cache each (origin, destination, date) lookup in memory for the day.
 
-### Scoring
-- Normalize each factor, apply each person's weights.
-- Compare two group strategies:
-  1. Weighted average across all members.
-  2. Maximize the least-happy person's score (egalitarian).
-- Explain the tradeoff in the README.
+### Rate limiting & caching
+- Token bucket per provider, in-memory (no Redis).
+- Weather cache: 15-minute TTL.
+- Also rate-limit the public API.
 
 ### CRUD resources
 - trips
 - members
-- preferences
+- preferences (includes preferred_temp_f)
+- destinations (includes nightlife_score)
 
 ---
 
-## Scope Cuts (tonight)
+## Schema
+
+```sql
+preferences
+  preferred_temp_f  NUMERIC(5,1)  CHECK (preferred_temp_f BETWEEN 20 AND 110)
+
+destinations
+  nightlife_score   NUMERIC(3,2)  CHECK (nightlife_score BETWEEN 0 AND 1)
+```
+
+---
+
+## Scope Cuts
 
 - No Redis
 - No WebSockets
@@ -98,20 +135,3 @@ Scoring only sees `FareQuote`.
 - Write tests as you go using fixtures, not live APIs.
 - Keep code simple; briefly explain non-obvious choices so the author can discuss them in interviews.
 - No em dashes in README or docs.
-
----
-
-## Current State
-
-- `~/trip-planner/` exists.
-- `fixtures/bna-sfo.json` is saved (check before assuming).
-- git init and npm install may or may not have been run — verify before proceeding.
-- Docker Desktop is available.
-
----
-
-## Next Step (on go-ahead)
-
-1. Verify environment: git, npm deps, docker-compose.yml, .gitignore includes .env.
-2. Propose Postgres schema and endpoint list for approval.
-3. Wait for approval before implementing.

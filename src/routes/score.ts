@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import pool from '../db';
-import { flightProvider, weatherProvider, nightlifeProvider } from '../providers';
+import { flightProvider, weatherProvider } from '../providers';
 import { scoreDestinations, type MemberInput, type DestinationData } from '../scoring';
 
 const router = Router({ mergeParams: true });
@@ -22,9 +22,10 @@ router.post('/', async (req: Request, res: Response) => {
   // Load trip members + preferences
   const { rows: members } = await pool.query<{
     id: string; name: string; home_airport: string;
-    budget: string; weather_weight: string; nightlife_weight: string;
+    budget: string; weather_weight: string; nightlife_weight: string; preferred_temp_f: string;
   }>(
-    `SELECT m.id, m.name, m.home_airport, p.budget, p.weather_weight, p.nightlife_weight
+    `SELECT m.id, m.name, m.home_airport,
+            p.budget, p.weather_weight, p.nightlife_weight, p.preferred_temp_f
      FROM members m
      JOIN preferences p ON p.member_id = m.id
      WHERE m.trip_id = $1`,
@@ -35,11 +36,11 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Load destination coordinates
+  // Load destination coordinates and nightlife scores from DB
   const { rows: destRows } = await pool.query<{
-    iata: string; city: string; lat: string; lon: string;
+    iata: string; city: string; lat: string; lon: string; nightlife_score: string;
   }>(
-    `SELECT iata, city, lat, lon FROM destinations WHERE iata = ANY($1)`,
+    `SELECT iata, city, lat, lon, nightlife_score FROM destinations WHERE iata = ANY($1)`,
     [iatas]
   );
   const unknownIatas = iatas.filter(i => !destRows.find(d => d.iata === i));
@@ -48,7 +49,7 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Fetch fares, weather, nightlife in parallel per destination
+  // Fetch fares and weather in parallel per destination
   const destData: DestinationData[] = await Promise.all(
     destRows.map(async dest => {
       const lat = Number(dest.lat);
@@ -60,17 +61,14 @@ router.post('/', async (req: Request, res: Response) => {
       );
       const cheapestFare = Math.min(...fares.map(f => f.cheapest));
 
-      const [weather, nightlife] = await Promise.all([
-        weatherProvider.getWeather(dest.iata, lat, lon),
-        nightlifeProvider.getNightlife(dest.iata, lat, lon),
-      ]);
+      const weather = await weatherProvider.getWeather(dest.iata, lat, lon);
 
       return {
         iata: dest.iata,
         city: dest.city,
         fare: cheapestFare,
         temperatureF: weather.temperatureF,
-        venueCount: nightlife.venueCount,
+        nightlifeScore: Number(dest.nightlife_score),
       };
     })
   );
@@ -81,6 +79,7 @@ router.post('/', async (req: Request, res: Response) => {
     budget: Number(m.budget),
     weatherWeight: Number(m.weather_weight),
     nightlifeWeight: Number(m.nightlife_weight),
+    preferredTempF: Number(m.preferred_temp_f),
   }));
 
   const ranked = scoreDestinations(memberInputs, destData);
