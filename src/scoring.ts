@@ -19,7 +19,7 @@ export interface MemberInput {
 export interface DestinationData {
   iata: string;
   city: string;
-  fare: number;             // cheapest one-way fare in USD
+  fares: Record<string, number>; // one-way fare in USD from each member's home airport, keyed by member id
   temperatureF: number;     // current forecast temperature
   nightlifeScore: number;   // 0-1, curated static score from DB
 }
@@ -27,6 +27,7 @@ export interface DestinationData {
 export interface MemberScore {
   memberId: string;
   memberName: string;
+  fare: number;             // this member's one-way fare in USD
   score: number;            // 0-1, higher is better
   affordable: boolean;
 }
@@ -34,7 +35,7 @@ export interface MemberScore {
 export interface RankedDestination {
   iata: string;
   city: string;
-  fare: number;
+  fare: number;             // cheapest fare across members, for display
   temperatureF: number;
   nightlifeScore: number;
   memberScores: MemberScore[];
@@ -48,8 +49,14 @@ export function scoreDestinations(
 ): RankedDestination[] {
   const ranked = destinations.map(dest => {
     const memberScores: MemberScore[] = members.map(m => {
+      // Each member is scored on their own fare, since home airports differ
+      const fare = dest.fares[m.id];
+      if (fare === undefined) {
+        throw new Error(`missing fare for member ${m.id} to ${dest.iata}`);
+      }
+
       // Cost: 1.0 at fare=0, falls linearly to 0 at fare=budget, 0 if over budget
-      const costScore = Math.max(0, 1 - dest.fare / m.budget);
+      const costScore = Math.max(0, 1 - fare / m.budget);
 
       // Weather: 1.0 at preferred temp, drops 0.02 per degree off, floors at 0
       // A 50°F difference = score of 0
@@ -68,8 +75,9 @@ export function scoreDestinations(
       return {
         memberId: m.id,
         memberName: m.name,
+        fare,
         score: Math.round(score * 1000) / 1000,
-        affordable: dest.fare <= m.budget,
+        affordable: fare <= m.budget,
       };
     });
 
@@ -80,7 +88,7 @@ export function scoreDestinations(
     return {
       iata: dest.iata,
       city: dest.city,
-      fare: dest.fare,
+      fare: Math.min(...memberScores.map(s => s.fare)),
       temperatureF: dest.temperatureF,
       nightlifeScore: dest.nightlifeScore,
       memberScores,

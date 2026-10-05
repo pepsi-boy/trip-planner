@@ -239,7 +239,7 @@ export default function App() {
                   {i + 1}. {r.city} <span style={{ color: '#64748b', fontWeight: 400 }}>({r.iata})</span>
                 </span>
                 <span style={{ color: '#94a3b8', fontSize: 13 }}>
-                  ${r.fare} | {r.temperatureF}°F | nightlife {r.nightlifeScore}
+                  from ${r.fare} | {r.temperatureF}°F | nightlife {r.nightlifeScore}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
@@ -253,7 +253,7 @@ export default function App() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {r.memberScores.map(s => (
                   <div key={s.memberId} style={{ background: '#0f172a', borderRadius: 4, padding: '4px 10px', fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {s.memberName} <strong>{s.score}</strong> <Badge ok={s.affordable} />
+                    {s.memberName} <span style={{ color: '#64748b' }}>${s.fare}</span> <strong>{s.score}</strong> <Badge ok={s.affordable} />
                   </div>
                 ))}
               </div>

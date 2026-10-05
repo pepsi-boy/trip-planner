@@ -23,7 +23,7 @@ export interface Preferences {
 }
 export interface Destination { iata: string; city: string; lat: number; lon: number; nightlife_score: number }
 
-export interface MemberScore { memberId: string; memberName: string; score: number; affordable: boolean }
+export interface MemberScore { memberId: string; memberName: string; fare: number; score: number; affordable: boolean }
 export interface RankedDestination {
   iata: string; city: string; fare: number; temperatureF: number; nightlifeScore: number;
   memberScores: MemberScore[]; groupWeightedAvg: number; groupMaxMin: number;
