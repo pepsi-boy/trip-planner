@@ -4,6 +4,8 @@
 //   parallel:   all requests at once via Promise.all, no cache
 //   cached:     same as parallel, but the 15-min cache is already warm
 // Each trial uses fresh provider instances so caches and rate limiters start empty.
+// Open-Meteo returns 429 on repeated bursts, so the script pauses between phases and
+// trials, and redoes a trial that hits a 429. Pauses and retries are never timed.
 //
 // Usage: npm run bench   (needs internet access, no database or API key)
 
@@ -22,6 +24,10 @@ const DESTINATIONS = [
   { iata: 'BCN', lat: 41.2971, lon: 2.0785 },
 ];
 const TRIALS = 5;
+const PHASE_PAUSE_MS = Number(process.env['BENCH_PHASE_PAUSE_MS'] ?? 3_000);
+const TRIAL_PAUSE_MS = Number(process.env['BENCH_TRIAL_PAUSE_MS'] ?? 10_000);
+const RETRY_PAUSE_MS = Number(process.env['BENCH_RETRY_PAUSE_MS'] ?? 30_000);
+const MAX_ATTEMPTS = 3;
 
 // Count real outbound requests by wrapping fetch
 let apiCalls = 0;
@@ -46,22 +52,41 @@ const median = (xs: number[]) => {
 
 const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+async function runTrial() {
+  const seqProvider = new OpenMeteoWeatherProvider();
+  const seq = await timed(async () => {
+    for (const d of DESTINATIONS) await seqProvider.getWeather(d.iata, d.lat, d.lon);
+  });
+
+  await pause(PHASE_PAUSE_MS);
+
+  const parProvider = new OpenMeteoWeatherProvider();
+  const fetchAll = () =>
+    Promise.all(DESTINATIONS.map(d => parProvider.getWeather(d.iata, d.lat, d.lon)));
+  const par = await timed(fetchAll);
+  const cached = await timed(fetchAll);
+
+  return { seq, par, cached };
+}
+
 async function main() {
   const results = { sequential: [] as number[], parallel: [] as number[], cached: [] as number[] };
   let callsCold = 0;
   let callsCached = 0;
 
   for (let t = 1; t <= TRIALS; t++) {
-    const seqProvider = new OpenMeteoWeatherProvider();
-    const seq = await timed(async () => {
-      for (const d of DESTINATIONS) await seqProvider.getWeather(d.iata, d.lat, d.lon);
-    });
-
-    const parProvider = new OpenMeteoWeatherProvider();
-    const fetchAll = () =>
-      Promise.all(DESTINATIONS.map(d => parProvider.getWeather(d.iata, d.lat, d.lon)));
-    const par = await timed(fetchAll);
-    const cached = await timed(fetchAll);
+    let trial: Awaited<ReturnType<typeof runTrial>> | undefined;
+    for (let attempt = 1; !trial; attempt++) {
+      try {
+        trial = await runTrial();
+      } catch (err) {
+        const rateLimited = err instanceof Error && err.message.includes('429');
+        if (!rateLimited || attempt === MAX_ATTEMPTS) throw err;
+        console.log(`trial ${t}: rate limited (429), waiting ${RETRY_PAUSE_MS / 1000}s and redoing it`);
+        await pause(RETRY_PAUSE_MS);
+      }
+    }
+    const { seq, par, cached } = trial;
 
     results.sequential.push(seq.ms);
     results.parallel.push(par.ms);
@@ -73,7 +98,7 @@ async function main() {
       `trial ${t}: sequential ${seq.ms.toFixed(0)}ms | parallel ${par.ms.toFixed(0)}ms | ` +
         `cached ${cached.ms.toFixed(2)}ms (${cached.calls} API calls)`,
     );
-    if (t < TRIALS) await pause(1000);
+    if (t < TRIALS) await pause(TRIAL_PAUSE_MS);
   }
 
   const seq = median(results.sequential);
