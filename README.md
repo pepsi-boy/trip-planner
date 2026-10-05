@@ -102,7 +102,7 @@ Returns both group strategies with per-member breakdowns.
 For each member + destination pair:
 
 ```
-cost_score      = max(0, 1 - fare / budget)
+cost_score      = max(0, 1 - fare / budget)   # fare from this member's home airport
 weather_score   = max(0, 1 - |forecast_temp - preferred_temp| / 50)
 nightlife_score = destination.nightlife_score  (0-1)
 

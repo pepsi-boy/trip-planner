@@ -55,18 +55,19 @@ router.post('/', async (req: Request, res: Response) => {
       const lat = Number(dest.lat);
       const lon = Number(dest.lon);
 
-      // Fetch fare for each member's home airport, take the cheapest
-      const fares = await Promise.all(
+      // Fetch fare from each member's home airport; each member is scored on their own fare
+      const quotes = await Promise.all(
         members.map(m => flightProvider.getFare(m.home_airport, dest.iata, departure_date))
       );
-      const cheapestFare = Math.min(...fares.map(f => f.cheapest));
+      const fares: Record<string, number> = {};
+      members.forEach((m, i) => { fares[m.id] = quotes[i]!.cheapest; });
 
       const weather = await weatherProvider.getWeather(dest.iata, lat, lon);
 
       return {
         iata: dest.iata,
         city: dest.city,
-        fare: cheapestFare,
+        fares,
         temperatureF: weather.temperatureF,
         nightlifeScore: Number(dest.nightlife_score),
       };
